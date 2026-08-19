@@ -10,9 +10,11 @@ s = p.read_text()
 replacements = {
     'val tomlPlugin = "org.toml.lang:262.9437.22"': 'val tomlPlugin: String by project',
     'id("org.jetbrains.intellij.platform") version "2.13.1"': 'id("org.jetbrains.intellij.platform") version "2.18.1"',
+    'id("org.jetbrains.grammarkit") version "2023.3.0.2"': 'id("org.jetbrains.intellij.platform.grammarkit") version "2.18.1"',
     'kotlin("jvm") version "2.2.20"': 'kotlin("jvm") version "2.3.20"',
     'environment("IDEA_BUILD_NUMBER", "253")': 'environment("IDEA_BUILD_NUMBER", "262")',
     '            bundledPlugins(listOf(tomlPlugin))': '            plugins(listOf(tomlPlugin))',
+    'plugin("org.jetbrains.grammarkit")': 'plugin("org.jetbrains.intellij.platform.grammarkit")',
     'import org.gradle.api.JavaVersion.VERSION_21': 'import org.gradle.api.JavaVersion.VERSION_25',
     'sourceCompatibility = VERSION_21': 'sourceCompatibility = VERSION_25',
     'targetCompatibility = VERSION_21': 'targetCompatibility = VERSION_25',
@@ -44,4 +46,4 @@ s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 p.write_text(s)
 PY
 
-grep -nE 'VERSION_25|JVM_25|kotlin\("jvm"\)|org.jetbrains.intellij.platform|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
+grep -nE 'VERSION_25|JVM_25|kotlin\("jvm"\)|org.jetbrains.intellij.platform|grammarkit|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
