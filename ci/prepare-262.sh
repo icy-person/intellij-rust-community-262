@@ -3,12 +3,12 @@ set -euo pipefail
 
 python3 - <<'PY'
 from pathlib import Path
+from urllib.request import urlopen
 
 p = Path("build.gradle.kts")
 s = p.read_text()
 
 helper_block = '''\nfun hasProp(name: String): Boolean = extra.has(name)\n\nfun prop(name: String): String =\n    extra.properties[name] as? String\n        ?: error("Property `$name` is not defined in gradle.properties")\n\nfun versionForIde(ideName: String): String = when (ideName) {\n    "IU", "IC" -> ideaVersion\n    else -> error("Unexpected IDE name: `$baseIDE`")\n}\n\nfun <T : ModuleDependency> T.excludeKotlinDeps() {\n    exclude(module = "kotlin-reflect")\n    exclude(module = "kotlin-runtime")\n    exclude(module = "kotlin-stdlib")\n    exclude(module = "kotlin-stdlib-common")\n    exclude(module = "kotlin-stdlib-jdk8")\n    exclude(module = "kotlinx-serialization-core")\n}\n'''
-
 old_helper = '''\nfun hasProp(name: String): Boolean = extra.has(name)\n\nfun prop(name: String): String =\n    extra.properties[name] as? String\n        ?: error("Property `$name` is not defined in gradle.properties")\n\nfun versionForIde(ideName: String): String = when (ideName) {\n    "IU", "IC" -> ideaVersion\n    else -> error("Unexpected IDE name: `$baseIDE`")\n}\n'''
 s = s.replace(old_helper, "\n")
 old_exclude = '''\nfun <T : ModuleDependency> T.excludeKotlinDeps() {\n    exclude(module = "kotlin-reflect")\n    exclude(module = "kotlin-runtime")\n    exclude(module = "kotlin-stdlib")\n    exclude(module = "kotlin-stdlib-common")\n    exclude(module = "kotlin-stdlib-jdk8")\n    exclude(module = "kotlinx-serialization-core")\n}\n'''
@@ -62,13 +62,31 @@ for block in exact_blocks.values():
     s = s.replace(block, '')
 p.write_text(s)
 
-# Patch the actual Kotlin source for IDEA 2026.2. This implementation avoids
-# ReadAction.nonBlocking entirely and makes the Computable generic explicit.
+# Restore the complete openapiext utility file from the upstream repository first.
 source = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
-source_text = source.read_text()
-start = source_text.find('inline fun <R> Project.nonBlocking(')
+upstream_url = "https://raw.githubusercontent.com/l2dy/intellij-rust-unofficial-plugin/master/src/main/kotlin/org/rust/openapiext/utils.kt"
+try:
+    upstream = urlopen(upstream_url, timeout=30).read().decode("utf-8")
+except Exception as exc:
+    raise SystemExit(f"Failed to restore upstream utils.kt: {exc}")
+source.write_text(upstream)
+
+# Apply only the changes required for IntelliJ Platform 262.
+source_text = upstream
+source_text = source_text.replace(
+    'import com.intellij.ide.ui.LafManager\nimport com.intellij.ide.ui.laf.UIThemeBasedLookAndFeelInfo\n',
+    ''
+)
+old_theme = '''val isUnderDarkTheme: Boolean\n    get() {\n        val lookAndFeel = LafManager.getInstance().currentLookAndFeel as? UIThemeBasedLookAndFeelInfo\n        return lookAndFeel?.theme?.isDark == true || UIUtil.isUnderDarcula()\n    }'''
+new_theme = 'val isUnderDarkTheme: Boolean get() = UIUtil.isUnderDarcula()'
+if old_theme not in source_text:
+    raise SystemExit("Expected upstream theme declaration was not found")
+source_text = source_text.replace(old_theme, new_theme, 1)
+
+old_nonblocking_start = 'inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {'
+start = source_text.find(old_nonblocking_start)
 if start == -1:
-    raise SystemExit("Project.nonBlocking declaration was not found")
+    raise SystemExit("Project.nonBlocking declaration was not found in restored upstream utils.kt")
 end = source_text.find('\n\n@Service', start)
 if end == -1:
     raise SystemExit("Project.nonBlocking block terminator was not found")
@@ -93,10 +111,26 @@ for path in ("settings.gradle.kts", "build.gradle.kts", "plugin/src/main/resourc
 if leftovers:
     raise SystemExit("262 patch left unsupported/stale entries:\n" + "\n".join(leftovers))
 
-# Final source guard: the fragile API must not remain in the generated 262 tree.
+# Final sanity checks: all foundational helpers must exist and the fragile API must not.
 final_source = source.read_text()
+required = [
+    'val isUnitTestMode:',
+    'fun checkIsDispatchThread()',
+    'val VirtualFile.pathAsPath:',
+    'fun VirtualFile.toPsiFile(',
+    'fun saveAllDocuments()',
+    'fun isFeatureEnabled(',
+    'fun <T, D> getCachedOrCompute(',
+    'fun plugin(): IdeaPluginDescriptor',
+    'fun <T> Project.runWriteCommandAction(',
+]
+missing = [needle for needle in required if needle not in final_source]
+if missing:
+    raise SystemExit("Restored utils.kt is missing required helpers: " + ", ".join(missing))
+if 'UIThemeBasedLookAndFeelInfo' in final_source or 'LafManager' in final_source:
+    raise SystemExit("262 utils.kt still contains obsolete UI theme API")
 if 'ReadAction.nonBlocking' in final_source:
-    raise SystemExit("262 patch still contains ReadAction.nonBlocking")
+    raise SystemExit("262 utils.kt still contains ReadAction.nonBlocking")
 if 'Computable<R> { block() }' not in final_source:
-    raise SystemExit("Explicit Computable<R> replacement was not applied")
+    raise SystemExit("262 Project.nonBlocking replacement was not applied")
 PY
