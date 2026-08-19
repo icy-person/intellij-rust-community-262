@@ -15,7 +15,7 @@ replacements = {
     'import org.gradle.api.JavaVersion.VERSION_21': 'import org.gradle.api.JavaVersion.VERSION_25',
     'sourceCompatibility = VERSION_21': 'sourceCompatibility = VERSION_25',
     'targetCompatibility = VERSION_21': 'targetCompatibility = VERSION_25',
-    'jvmTarget.set(JvmTarget.JVM_21)': 'jvmTarget.set(JvmTarget.JVM_25)',
+    'jvmTarget.set(JvmTarget.JVM_21)': 'jvmTarget.set(JvmTarget.fromTarget("25"))',
 }
 
 for old, new in replacements.items():
@@ -44,4 +44,4 @@ p.write_text(s)
 PY
 
 # Verify the critical 262 migration points before Gradle starts.
-grep -nE 'VERSION_25|JVM_25|org.jetbrains.intellij.platform|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
+grep -nE 'VERSION_25|JvmTarget.fromTarget|JVM_25|org.jetbrains.intellij.platform|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
