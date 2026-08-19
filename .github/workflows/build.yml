@@ -49,7 +49,7 @@ jobs:
           ls -lah plugin/build/distributions/
 
       - name: Upload plugin ZIP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: intellij-rust-community-262
           path: plugin/build/distributions/*.zip
