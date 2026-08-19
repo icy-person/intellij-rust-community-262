@@ -68,6 +68,7 @@ s = p.read_text()
 s = s.replace('import com.intellij.execution.runners.ExecutionUtil\n', '')
 s = s.replace('import com.intellij.execution.ExecutionManager\n', '')
 s = s.replace('ExecutionUtil.restart(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(environment)')
+s = s.replace('ExecutionManager.getInstance(environment.project).restartRunProfile(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(environment)')
 if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' not in s:
     s = s.replace('import com.intellij.execution.ExecutorRegistry\n', 'import com.intellij.execution.ExecutorRegistry\nimport com.intellij.execution.impl.ExecutionManagerImpl\n')
 p.write_text(s)
