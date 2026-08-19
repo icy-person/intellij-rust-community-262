@@ -7,11 +7,51 @@ from pathlib import Path
 p = Path("build.gradle.kts")
 s = p.read_text()
 
-helper_block = '''\nfun hasProp(name: String): Boolean = extra.has(name)\n\nfun prop(name: String): String =\n    extra.properties[name] as? String\n        ?: error("Property `$name` is not defined in gradle.properties")\n\nfun versionForIde(ideName: String): String = when (ideName) {\n    "IU", "IC" -> ideaVersion\n    else -> error("Unexpected IDE name: `$baseIDE`")\n}\n\nfun <T : ModuleDependency> T.excludeKotlinDeps() {\n    exclude(module = "kotlin-reflect")\n    exclude(module = "kotlin-runtime")\n    exclude(module = "kotlin-stdlib")\n    exclude(module = "kotlin-stdlib-common")\n    exclude(module = "kotlin-stdlib-jdk8")\n    exclude(module = "kotlinx-serialization-core")\n}\n'''
+helper_block = '''
+fun hasProp(name: String): Boolean = extra.has(name)
 
-old_helper = '''\nfun hasProp(name: String): Boolean = extra.has(name)\n\nfun prop(name: String): String =\n    extra.properties[name] as? String\n        ?: error("Property `$name` is not defined in gradle.properties")\n\nfun versionForIde(ideName: String): String = when (ideName) {\n    "IU", "IC" -> ideaVersion\n    else -> error("Unexpected IDE name: `$baseIDE`")\n}\n'''
+fun prop(name: String): String =
+    extra.properties[name] as? String
+        ?: error("Property `$name` is not defined in gradle.properties")
+
+fun versionForIde(ideName: String): String = when (ideName) {
+    "IU", "IC" -> ideaVersion
+    else -> error("Unexpected IDE name: `$baseIDE`")
+}
+
+fun <T : ModuleDependency> T.excludeKotlinDeps() {
+    exclude(module = "kotlin-reflect")
+    exclude(module = "kotlin-runtime")
+    exclude(module = "kotlin-stdlib")
+    exclude(module = "kotlin-stdlib-common")
+    exclude(module = "kotlin-stdlib-jdk8")
+    exclude(module = "kotlinx-serialization-core")
+}
+'''
+
+old_helper = '''
+fun hasProp(name: String): Boolean = extra.has(name)
+
+fun prop(name: String): String =
+    extra.properties[name] as? String
+        ?: error("Property `$name` is not defined in gradle.properties")
+
+fun versionForIde(ideName: String): String = when (ideName) {
+    "IU", "IC" -> ideaVersion
+    else -> error("Unexpected IDE name: `$baseIDE`")
+}
+'''
 s = s.replace(old_helper, "\n")
-old_exclude = '''\nfun <T : ModuleDependency> T.excludeKotlinDeps() {\n    exclude(module = "kotlin-reflect")\n    exclude(module = "kotlin-runtime")\n    exclude(module = "kotlin-stdlib")\n    exclude(module = "kotlin-stdlib-common")\n    exclude(module = "kotlin-stdlib-jdk8")\n    exclude(module = "kotlinx-serialization-core")\n}\n'''
+old_exclude = '''
+fun <T : ModuleDependency> T.excludeKotlinDeps() {
+    exclude(module = "kotlin-reflect")
+    exclude(module = "kotlin-runtime")
+    exclude(module = "kotlin-stdlib")
+    exclude(module = "kotlin-stdlib-common")
+    exclude(module = "kotlin-stdlib-jdk8")
+    exclude(module = "kotlinx-serialization-core")
+}
+'''
 s = s.replace(old_exclude, "\n")
 anchor = 'val isTeamcity = System.getenv("TEAMCITY_VERSION") != null\n'
 if helper_block.strip() not in s:
@@ -37,7 +77,11 @@ for old, new in replacements.items():
 
 needle = '            create(baseIDE, baseVersion) { useCache = true }'
 if needle in s and 'intellijIdea(ideaVersion)' not in s:
-    s = s.replace(needle, '''            if (baseIDE == "IC") {\n                intellijIdea(ideaVersion)\n            } else {\n                create(baseIDE, baseVersion)\n            }''', 1)
+    s = s.replace(needle, '''            if (baseIDE == "IC") {
+                intellijIdea(ideaVersion)
+            } else {
+                create(baseIDE, baseVersion)
+            }''', 1)
 s = s.replace('intellijIdea(ideaVersion) { useCache = true }', 'intellijIdea(ideaVersion)')
 s = s.replace('create(baseIDE, baseVersion) { useCache = true }', 'create(baseIDE, baseVersion)')
 
@@ -46,7 +90,14 @@ s = s.replace('                javaScriptPlugin,\n                mlCompletionPl
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 
 marker = '            bundledModule("intellij.spellchecker")\n'
-modules = '''            bundledModule("intellij.spellchecker")\n            bundledModule("intellij.platform.smRunner")\n            bundledModule("intellij.platform.structureView.impl")\n            bundledModule("intellij.platform.testRunner")\n            bundledModule("intellij.platform.structuralSearch")\n            bundledModule("intellij.platform.structureView")\n            bundledModule("intellij.platform.navbar")\n'''
+modules = '''            bundledModule("intellij.spellchecker")
+            bundledModule("intellij.platform.smRunner")
+            bundledModule("intellij.platform.structureView.impl")
+            bundledModule("intellij.platform.testRunner")
+            bundledModule("intellij.platform.structuralSearch")
+            bundledModule("intellij.platform.structureView")
+            bundledModule("intellij.platform.navbar")
+'''
 if marker in s and 'bundledModule("intellij.platform.smRunner")' not in s:
     s = s.replace(marker, modules, 1)
 
@@ -55,17 +106,40 @@ for name in ("duplicates", "ml-completion"):
     s = s.replace(f'            pluginComposedModule(implementation(project(":{name}")))\n', '')
 
 exact_blocks = {
-    'duplicates': '''project(":duplicates") {\n    dependencies {\n        implementation(project(":"))\n        testImplementation(project(":", "testOutput"))\n    }\n}\n\n''',
-    'ml-completion': '''project(":ml-completion") {\n    dependencies {\n        implementation("org.jetbrains.intellij.deps.completion:completion-ranking-rust:0.4.1")\n        implementation(project(":"))\n        testImplementation(project(":", "testOutput"))\n    }\n}\n\n''',
+    'duplicates': '''project(":duplicates") {
+    dependencies {
+        implementation(project(":"))
+        testImplementation(project(":", "testOutput"))
+    }
+}
+
+''',
+    'ml-completion': '''project(":ml-completion") {
+    dependencies {
+        implementation("org.jetbrains.intellij.deps.completion:completion-ranking-rust:0.4.1")
+        implementation(project(":"))
+        testImplementation(project(":", "testOutput"))
+    }
+}
+
+''',
 }
 for block in exact_blocks.values():
     s = s.replace(block, '')
 
-# Kotlin 2.3.x can fail to infer the generic result of ReadAction.nonBlocking
-# through an inline lambda. Make both the Callable type and generic result explicit.
-s = s.replace('ReadAction.nonBlocking(Callable { block() })', 'ReadAction.nonBlocking<R>(Callable<R> { block() })')
-s = s.replace('ReadAction.nonBlocking(Callable<R> { block() })', 'ReadAction.nonBlocking<R>(Callable<R> { block() })')
 p.write_text(s)
+
+# Patch the actual Kotlin source. Previous versions mistakenly applied this
+# replacement to build.gradle.kts instead of utils.kt.
+source = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
+source_text = source.read_text()
+old = 'ReadAction.nonBlocking(Callable { block() })'
+new = 'ReadAction.nonBlocking<R>(Callable<R> { block() })'
+if old in source_text:
+    source_text = source_text.replace(old, new)
+elif 'ReadAction.nonBlocking<R>(Callable<R> { block() })' not in source_text:
+    raise SystemExit("Expected Project.nonBlocking source expression was not found")
+source.write_text(source_text)
 
 p = Path("settings.gradle.kts")
 s = p.read_text().replace('    "duplicates",\n', '').replace('    "ml-completion"\n', '')
