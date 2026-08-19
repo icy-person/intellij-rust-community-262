@@ -56,12 +56,36 @@ modules = '''            bundledModule("intellij.spellchecker")
 if marker in s and 'bundledModule("intellij.platform.smRunner")' not in s:
     s = s.replace(marker, modules, 1)
 
+# IntelliJ IDEA Community has no Duplicate Detection API in 262.
+# Remove the dedicated duplicates project and its composed plugin module.
+s = s.replace('        pluginComposedModule(implementation(project(":duplicates")))\n', '')
+start = 'project(":duplicates") {\n'
+if start in s:
+    end = s.find('\nproject(":coverage") {', s.index(start))
+    if end != -1:
+        s = s[:s.index(start)] + s[end + 1:]
+
+p.write_text(s)
+
+p = Path("settings.gradle.kts")
+s = p.read_text()
+s = s.replace('    "duplicates",\n', '')
+p.write_text(s)
+
+p = Path("plugin/src/main/resources/META-INF/plugin.xml")
+s = p.read_text()
+s = s.replace('        <module name="org.rust.duplicates"/>\n', '')
 p.write_text(s)
 PY
 
 # IntelliJ 2026.2 API migrations needed by this codebase.
 python3 - <<'PY'
 from pathlib import Path
+
+p = Path("build.gradle.kts")
+s = p.read_text()
+
+p.write_text(s)
 
 p = Path("src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt")
 s = p.read_text()
@@ -107,4 +131,4 @@ s = s.replace(
 p.write_text(s)
 PY
 
-grep -nE 'smRunner|structureView.impl|testRunner|structuralSearch|restartRunProfile|createStub\(|isUnderDarkTheme' build.gradle.kts src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt src/main/kotlin/org/rust/openapiext/utils.kt || true
+grep -nE 'smRunner|structureView.impl|testRunner|structuralSearch|restartRunProfile|createStub\(|isUnderDarkTheme|duplicates' build.gradle.kts settings.gradle.kts plugin/src/main/resources/META-INF/plugin.xml src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt src/main/kotlin/org/rust/openapiext/utils.kt || true
