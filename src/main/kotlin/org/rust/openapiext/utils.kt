@@ -95,7 +95,7 @@ fun <T> recursionGuard(key: Any, block: Computable<T>, memoize: Boolean = true):
 
 fun checkWriteAccessAllowed() = check(ApplicationManager.getApplication().isWriteAccessAllowed) { "Needs write action" }
 fun checkWriteAccessNotAllowed() = check(!ApplicationManager.getApplication().isWriteAccessAllowed)
-fun checkReadAccessAllowed() = check(ApplicationManager.getApplication().isReadAccessAllowed) { "Needs read action" }
+fun checkReadAccessAllowed() = check(ApplicationManager.getApplication().isReadAccessAllowed) { "Needs read access" }
 fun checkReadAccessNotAllowed() = check(!ApplicationManager.getApplication().isReadAccessAllowed)
 fun checkIsDispatchThread() = check(ApplicationManager.getApplication().isDispatchThread) { "Should be invoked on the Swing dispatch thread" }
 fun checkIsBackgroundThread() = check(!ApplicationManager.getApplication().isDispatchThread) { "Long running operation invoked on UI thread" }
@@ -315,10 +315,10 @@ inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiCon
     if (isUnitTestMode) {
         uiContinuation(block())
     } else {
-        ReadAction.nonBlocking(Callable { block() })
+        ReadAction.nonBlocking<R>(Callable<R> { block() })
             .inSmartMode(this)
             .expireWith(RsPluginDisposable.getInstance(this))
-            .finishOnUiThread(ModalityState.current()) { result -> uiContinuation(result) }
+            .finishOnUiThread(ModalityState.current()) { result: R -> uiContinuation(result) }
             .submit(AppExecutorUtil.getAppExecutorService())
     }
 }
