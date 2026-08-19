@@ -34,7 +34,7 @@ jobs:
           echo "platformVersion=$(grep '^platformVersion=' gradle.properties | cut -d= -f2)"
           echo "baseIDE=$(grep '^baseIDE=' gradle.properties | cut -d= -f2)"
           echo "JVM targets:"
-          grep -nE 'VERSION_25|JVM_25' build.gradle.kts
+          grep -nE 'VERSION_24|JVM_24|JvmTarget.fromTarget' build.gradle.kts || true
           echo "IDE environment:"
           cat gradle-262.properties
 
