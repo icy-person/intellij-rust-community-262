@@ -62,22 +62,18 @@ for block in exact_blocks.values():
     s = s.replace(block, '')
 p.write_text(s)
 
-# Patch the actual Kotlin source for IDEA 2026.2.
+# Patch the actual Kotlin source for IDEA 2026.2. Avoid ReadAction.nonBlocking's
+# generic signature because Kotlin 2.3 + Platform 262 cannot infer it reliably.
 source = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
 source_text = source.read_text()
-old_expr = '''        ReadAction.nonBlocking(Callable { block() })\n            .inSmartMode(this)\n            .expireWith(RsPluginDisposable.getInstance(this))\n            .finishOnUiThread(ModalityState.current()) { result -> uiContinuation(result) }\n            .submit(AppExecutorUtil.getAppExecutorService())'''
-new_expr = '''        ReadAction.nonBlocking<R>(Callable<R> { block() })\n            .inSmartMode(this)\n            .expireWith(RsPluginDisposable.getInstance(this))\n            .finishOnUiThread(ModalityState.current()) { result: R -> uiContinuation(result) }\n            .submit(AppExecutorUtil.getAppExecutorService())'''
-if old_expr in source_text:
-    source_text = source_text.replace(old_expr, new_expr, 1)
-else:
-    # Also normalize the intermediate forms produced by older patchers.
-    source_text = source_text.replace(
-        'ReadAction.nonBlocking<R>(Callable<R> { block() })\n            .inSmartMode(this)\n            .expireWith(RsPluginDisposable.getInstance(this))\n            .finishOnUiThread(ModalityState.current()) { result -> uiContinuation(result) }\n            .submit(AppExecutorUtil.getAppExecutorService())',
-        'ReadAction.nonBlocking<R>(Callable<R> { block() })\n            .inSmartMode(this)\n            .expireWith(RsPluginDisposable.getInstance(this))\n            .finishOnUiThread(ModalityState.current()) { result: R -> uiContinuation(result) }\n            .submit(AppExecutorUtil.getAppExecutorService())',
-        1,
-    )
-    if 'ReadAction.nonBlocking<R>(Callable<R> { block() })' not in source_text:
-        raise SystemExit("Expected Project.nonBlocking source expression was not found")
+start = source_text.find('inline fun <R> Project.nonBlocking(')
+if start == -1:
+    raise SystemExit("Project.nonBlocking declaration was not found")
+end = source_text.find('\n\n@Service', start)
+if end == -1:
+    raise SystemExit("Project.nonBlocking block terminator was not found")
+new_block = '''inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {\n    if (isUnitTestMode) {\n        uiContinuation(block())\n    } else {\n        AppExecutorUtil.getAppExecutorService().execute {\n            val result = ApplicationManager.getApplication().runReadAction(Computable { block() })\n            ApplicationManager.getApplication().invokeLater(\n                { uiContinuation(result) },\n                ModalityState.current()\n            )\n        }\n    }\n}'''
+source_text = source_text[:start] + new_block + source_text[end:]
 source.write_text(source_text)
 
 p = Path("settings.gradle.kts")
@@ -96,4 +92,11 @@ for path in ("settings.gradle.kts", "build.gradle.kts", "plugin/src/main/resourc
             leftovers.append(f"{path}: {needle}")
 if leftovers:
     raise SystemExit("262 patch left unsupported/stale entries:\n" + "\n".join(leftovers))
+
+# Final source guard: the fragile expression must not be present in the generated 262 tree.
+final_source = source.read_text()
+if 'ReadAction.nonBlocking' in final_source:
+    raise SystemExit("262 patch still contains ReadAction.nonBlocking in Project.nonBlocking")
+if 'AppExecutorUtil.getAppExecutorService().execute' not in final_source:
+    raise SystemExit("262 Project.nonBlocking replacement was not applied")
 PY
