@@ -60,7 +60,6 @@ import java.lang.ref.SoftReference
 import java.lang.reflect.Field
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.Pair
 import kotlin.reflect.KProperty
@@ -95,7 +94,7 @@ fun <T> recursionGuard(key: Any, block: Computable<T>, memoize: Boolean = true):
 
 fun checkWriteAccessAllowed() = check(ApplicationManager.getApplication().isWriteAccessAllowed) { "Needs write action" }
 fun checkWriteAccessNotAllowed() = check(!ApplicationManager.getApplication().isWriteAccessAllowed)
-fun checkReadAccessAllowed() = check(ApplicationManager.getApplication().isReadAccessAllowed) { "Needs read access" }
+fun checkReadAccessAllowed() = check(ApplicationManager.getApplication().isReadAccessAllowed) { "Needs read action" }
 fun checkReadAccessNotAllowed() = check(!ApplicationManager.getApplication().isReadAccessAllowed)
 fun checkIsDispatchThread() = check(ApplicationManager.getApplication().isDispatchThread) { "Should be invoked on the Swing dispatch thread" }
 fun checkIsBackgroundThread() = check(!ApplicationManager.getApplication().isDispatchThread) { "Long running operation invoked on UI thread" }
@@ -315,11 +314,10 @@ inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiCon
     if (isUnitTestMode) {
         uiContinuation(block())
     } else {
-        ReadAction.nonBlocking<R>(Callable<R> { block() })
-            .inSmartMode(this)
-            .expireWith(RsPluginDisposable.getInstance(this))
-            .finishOnUiThread(ModalityState.current()) { result: R -> uiContinuation(result) }
-            .submit(AppExecutorUtil.getAppExecutorService())
+        AppExecutorUtil.getAppExecutorService().execute {
+            val result = ApplicationManager.getApplication().runReadAction(Computable { block() })
+            ApplicationManager.getApplication().invokeLater({ uiContinuation(result) }, ModalityState.current())
+        }
     }
 }
 
