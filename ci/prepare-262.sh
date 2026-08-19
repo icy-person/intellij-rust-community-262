@@ -37,12 +37,10 @@ if needle in s and 'if (baseIDE == "IC")' not in s:
         1,
     )
 
-# ML ranking is not a bundled plugin in IDEA 2026.2.
 s = s.replace('val mlCompletionPlugin = "com.intellij.completion.ml.ranking"\n', '')
 s = s.replace('                javaScriptPlugin,\n                mlCompletionPlugin\n', '                javaScriptPlugin\n')
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 
-# IntelliJ 2026.2 modularized several APIs that this older Rust plugin uses.
 marker = '            bundledModule("intellij.spellchecker")\n'
 modules = '''            bundledModule("intellij.spellchecker")
             bundledModule("intellij.platform.smRunner")
