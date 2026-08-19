@@ -61,9 +61,10 @@ exact_blocks = {
 for block in exact_blocks.values():
     s = s.replace(block, '')
 
-# Kotlin 2.3.0/2.3.x may not infer the ReadAction.nonBlocking result type through an inline lambda.
-# Make the callable type explicit for IntelliJ 2026.2 builds.
-s = s.replace('ReadAction.nonBlocking(Callable { block() })', 'ReadAction.nonBlocking(Callable<R> { block() })')
+# Kotlin 2.3.x can fail to infer the generic result of ReadAction.nonBlocking
+# through an inline lambda. Make both the Callable type and generic result explicit.
+s = s.replace('ReadAction.nonBlocking(Callable { block() })', 'ReadAction.nonBlocking<R>(Callable<R> { block() })')
+s = s.replace('ReadAction.nonBlocking(Callable<R> { block() })', 'ReadAction.nonBlocking<R>(Callable<R> { block() })')
 p.write_text(s)
 
 p = Path("settings.gradle.kts")
