@@ -44,18 +44,66 @@ s = s.replace('                javaScriptPlugin,\n                mlCompletionPl
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 
 # IntelliJ 2026.2 modularized several APIs that this older Rust plugin uses.
-# Add the explicit platform modules to every project dependency set.
 marker = '            bundledModule("intellij.spellchecker")\n'
 modules = '''            bundledModule("intellij.spellchecker")
+            bundledModule("intellij.platform.smRunner")
+            bundledModule("intellij.platform.structureView.impl")
             bundledModule("intellij.platform.testRunner")
             bundledModule("intellij.platform.structuralSearch")
             bundledModule("intellij.platform.structureView")
             bundledModule("intellij.platform.navbar")
 '''
-if marker in s and 'bundledModule("intellij.platform.testRunner")' not in s:
+if marker in s and 'bundledModule("intellij.platform.smRunner")' not in s:
     s = s.replace(marker, modules, 1)
 
 p.write_text(s)
 PY
 
-grep -nE 'testRunner|structuralSearch|structureView|navbar|VERSION_25|JVM_25|kotlin\("jvm"\)|grammarkit|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER' build.gradle.kts || true
+# IntelliJ 2026.2 API migrations needed by this codebase.
+python3 - <<'PY'
+from pathlib import Path
+
+p = Path("src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt")
+s = p.read_text()
+s = s.replace('import com.intellij.execution.runners.ExecutionUtil\n', '')
+s = s.replace('import com.intellij.execution.ExecutionManager\n', '')
+s = s.replace('ExecutionUtil.restart(environment)', 'ExecutionManager.getInstance(environment.project).restartRunProfile(environment)')
+if 'import com.intellij.execution.ExecutionManager\n' not in s:
+    s = s.replace('import com.intellij.execution.ExecutorRegistry\n', 'import com.intellij.execution.ExecutionManager\nimport com.intellij.execution.ExecutorRegistry\n')
+p.write_text(s)
+
+p = Path("src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt")
+s = p.read_text()
+s = s.replace(
+'''        override fun createStub(parentStub: StubElement<*>, node: ASTNode): StubElement<*>? {
+            val nodeType = node.elementType
+            val factory = StubElementRegistryService.getInstance().getStubFactory(nodeType) ?: return null
+''',
+'''        override fun createStub(
+            parentStub: StubElement<*>,
+            node: ASTNode,
+            registryService: StubElementRegistryService
+        ): StubElement<*>? {
+            val nodeType = node.elementType
+            val factory = registryService.getStubFactory(nodeType) ?: return null
+''')
+p.write_text(s)
+
+p = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
+s = p.read_text()
+s = s.replace('import com.intellij.ide.ui.LafManager\n', '')
+s = s.replace('import com.intellij.ide.ui.laf.UIThemeBasedLookAndFeelInfo\n', '')
+s = s.replace(
+'''val isUnderDarkTheme: Boolean
+    get() {
+        val lookAndFeel = LafManager.getInstance().currentLookAndFeel as? UIThemeBasedLookAndFeelInfo
+        return lookAndFeel?.theme?.isDark == true || UIUtil.isUnderDarcula()
+    }
+''',
+'''val isUnderDarkTheme: Boolean
+    get() = UIUtil.isUnderDarcula()
+''')
+p.write_text(s)
+PY
+
+grep -nE 'smRunner|structureView.impl|testRunner|structuralSearch|restartRunProfile|createStub\(|isUnderDarkTheme' build.gradle.kts src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt src/main/kotlin/org/rust/openapiext/utils.kt || true
