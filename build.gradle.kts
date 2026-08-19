@@ -34,7 +34,7 @@ val jsonPlugin = "com.intellij.modules.json"
 // https://plugins.jetbrains.com/docs/intellij/spell-checking.html#grammar-checks
 val graziePlugin = "tanvd.grazi"
 
-val tomlPlugin: String by project
+val tomlPlugin = "org.toml.lang"
 val psiViewerPlugin: String by project
 val copyrightPlugin = "com.intellij.copyright"
 val javaPlugin = "com.intellij.java"
@@ -433,7 +433,7 @@ project(":") {
 
     dependencies {
         intellijPlatform {
-            plugins(listOf(tomlPlugin))
+            bundledPlugins(listOf(tomlPlugin))
         }
 
         implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.20.0") {
