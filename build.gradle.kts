@@ -200,7 +200,11 @@ allprojects {
 
     dependencies {
         intellijPlatform {
-            create(baseIDE, baseVersion) { useCache = true }
+            if (baseIDE == "IC") {
+                intellijIdea(ideaVersion) { useCache = true }
+            } else {
+                create(baseIDE, baseVersion) { useCache = true }
+            }
 
             pluginVerifier()
 
