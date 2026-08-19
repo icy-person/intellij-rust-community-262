@@ -12,10 +12,11 @@ replacements = {
     'id("org.jetbrains.intellij.platform") version "2.13.1"': 'id("org.jetbrains.intellij.platform") version "2.18.1"',
     'environment("IDEA_BUILD_NUMBER", "253")': 'environment("IDEA_BUILD_NUMBER", "262")',
     '            bundledPlugins(listOf(tomlPlugin))': '            plugins(listOf(tomlPlugin))',
-    'import org.gradle.api.JavaVersion.VERSION_21': 'import org.gradle.api.JavaVersion.VERSION_25',
-    'sourceCompatibility = VERSION_21': 'sourceCompatibility = VERSION_25',
-    'targetCompatibility = VERSION_21': 'targetCompatibility = VERSION_25',
-    'jvmTarget.set(JvmTarget.JVM_21)': 'jvmTarget.set(JvmTarget.fromTarget("25"))',
+    'import org.gradle.api.JavaVersion.VERSION_21': 'import org.gradle.api.JavaVersion.VERSION_24',
+    'sourceCompatibility = VERSION_21': 'sourceCompatibility = VERSION_24',
+    'targetCompatibility = VERSION_21': 'targetCompatibility = VERSION_24',
+    'jvmTarget.set(JvmTarget.JVM_21)': 'jvmTarget.set(JvmTarget.JVM_24)',
+    'jvmTarget.set(JvmTarget.fromTarget("25"))': 'jvmTarget.set(JvmTarget.JVM_24)',
 }
 
 for old, new in replacements.items():
@@ -43,5 +44,4 @@ s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 p.write_text(s)
 PY
 
-# Verify the critical 262 migration points before Gradle starts.
-grep -nE 'VERSION_25|JvmTarget.fromTarget|JVM_25|org.jetbrains.intellij.platform|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
+grep -nE 'VERSION_24|JvmTarget\.JVM_24|JVM_25|org.jetbrains.intellij.platform|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
