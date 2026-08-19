@@ -9,7 +9,6 @@ import com.intellij.concurrency.SensitiveProgressWrapper
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.ui.LafManager
-import com.intellij.ide.ui.laf.UIThemeBasedLookAndFeelInfo
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
@@ -72,10 +71,7 @@ val isHeadlessEnvironment: Boolean get() = ApplicationManager.getApplication().i
 val isDispatchThread: Boolean get() = ApplicationManager.getApplication().isDispatchThread
 val isInternal: Boolean get() = ApplicationManager.getApplication().isInternal
 val isUnderDarkTheme: Boolean
-    get() {
-        val lookAndFeel = LafManager.getInstance().currentLookAndFeel as? UIThemeBasedLookAndFeelInfo
-        return lookAndFeel?.theme?.isDark == true || UIUtil.isUnderDarcula()
-    }
+    get() = UIUtil.isUnderDarcula()
 
 /**
  * Perform a write action for the provided project.
@@ -379,7 +375,6 @@ fun <T : Any> executeUnderProgressWithWriteActionPriorityWithRetries(
         }
         if (!success) {
             indicator.checkCanceled()
-            // wait for write action to complete
             ApplicationManager.getApplication().runReadAction(EmptyRunnable.getInstance())
         }
     } while (!success)
@@ -437,84 +432,3 @@ val DataContext.editor: Editor?
 
 val DataContext.project: Project?
     get() = getData(CommonDataKeys.PROJECT)
-
-val DataContext.elementUnderCaretInEditor: PsiElement?
-    get() {
-        val psiFile = psiFile ?: return null
-        val editor = editor ?: return null
-
-        return psiFile.findElementAt(editor.caretModel.offset)
-    }
-
-fun isFeatureEnabled(featureId: String): Boolean {
-    // Hack to pass values of experimental features in headless IDE run
-    // Should help to configure IDE-based tools like Qodana
-    if (isHeadlessEnvironment) {
-        val value = System.getProperty(featureId)?.toBooleanStrictOrNull()
-        if (value != null) return value
-    }
-
-    return Experiments.getInstance().isFeatureEnabled(featureId)
-}
-
-fun setFeatureEnabled(featureId: String, enabled: Boolean) = Experiments.getInstance().setFeatureEnabled(featureId, enabled)
-
-fun <T> runWithEnabledFeatures(vararg featureIds: String, action: () -> T): T {
-    val currentValues = featureIds.map { it to isFeatureEnabled(it) }
-    featureIds.forEach { setFeatureEnabled(it, true) }
-    return try {
-        action()
-    } finally {
-        currentValues.forEach { (featureId, currentValue) -> setFeatureEnabled(featureId, currentValue) }
-    }
-}
-
-/**
- * Returns result of [provider] and store it in [dataHolder] among with [dependency].
- * If stored dependency equals [dependency], then returns stored result, without invoking [provider].
- */
-fun <T, D> getCachedOrCompute(
-    dataHolder: UserDataHolder,
-    key: Key<SoftReference<Pair<T, D>>>,
-    dependency: D,
-    provider: () -> T
-): T {
-    val oldResult = dataHolder.getUserData(key)?.get()
-    if (oldResult != null && oldResult.second == dependency) {
-        return oldResult.first
-    }
-    val value = provider()
-    dataHolder.putUserData(key, SoftReference(value to dependency))
-    return value
-}
-
-/** Intended to be invoked from EDT */
-inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {
-    if (isUnitTestMode) {
-        val result = block()
-        uiContinuation(result)
-    } else {
-        ReadAction.nonBlocking(Callable {
-            block()
-        })
-            .inSmartMode(this)
-            .expireWith(RsPluginDisposable.getInstance(this))
-            .finishOnUiThread(ModalityState.current()) { result ->
-                uiContinuation(result)
-            }.submit(AppExecutorUtil.getAppExecutorService())
-    }
-}
-
-@Service
-class RsPluginDisposable : Disposable {
-    companion object {
-        @JvmStatic
-        fun getInstance(project: Project): Disposable = project.service<RsPluginDisposable>()
-    }
-
-    override fun dispose() {}
-}
-
-inline fun <reified T: Configurable> Project.showSettingsDialog() {
-    ShowSettingsUtil.getInstance().showSettingsDialog(this, T::class.java)
-}
