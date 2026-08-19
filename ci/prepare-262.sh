@@ -43,7 +43,19 @@ s = s.replace('val mlCompletionPlugin = "com.intellij.completion.ml.ranking"\n',
 s = s.replace('                javaScriptPlugin,\n                mlCompletionPlugin\n', '                javaScriptPlugin\n')
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 
+# IntelliJ 2026.2 modularized several APIs that this older Rust plugin uses.
+# Add the explicit platform modules to every project dependency set.
+marker = '            bundledModule("intellij.spellchecker")\n'
+modules = '''            bundledModule("intellij.spellchecker")
+            bundledModule("intellij.platform.testRunner")
+            bundledModule("intellij.platform.structuralSearch")
+            bundledModule("intellij.platform.structureView")
+            bundledModule("intellij.platform.navbar")
+'''
+if marker in s and 'bundledModule("intellij.platform.testRunner")' not in s:
+    s = s.replace(marker, modules, 1)
+
 p.write_text(s)
 PY
 
-grep -nE 'VERSION_25|JVM_25|kotlin\("jvm"\)|org.jetbrains.intellij.platform|grammarkit|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER|mlCompletionPlugin|bundledPlugins\(listOf\(tomlPlugin\)\)' build.gradle.kts || true
+grep -nE 'testRunner|structuralSearch|structureView|navbar|VERSION_25|JVM_25|kotlin\("jvm"\)|grammarkit|tomlPlugin|intellijIdea\(|IDEA_BUILD_NUMBER' build.gradle.kts || true
