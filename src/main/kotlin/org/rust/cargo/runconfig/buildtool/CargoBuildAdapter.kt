@@ -9,13 +9,12 @@ import com.intellij.build.BuildContentDescriptor
 import com.intellij.build.BuildProgressListener
 import com.intellij.build.DefaultBuildDescriptor
 import com.intellij.build.events.impl.*
-import com.intellij.execution.ExecutorRegistry
+import com.intellij.execution.ExecutionManager
 import com.intellij.execution.actions.StopProcessAction
 import com.intellij.execution.impl.ExecutionManagerImpl
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
-import com.intellij.execution.runners.ExecutionUtil
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAwareAction
@@ -104,7 +103,6 @@ class CargoBuildAdapter(
                     val project = environment.project
                     val settings = environment.runnerAndConfigurationSettings
                     return (!DumbService.isDumb(project) || settings == null || settings.type.isDumbAware) &&
-                        !ExecutorRegistry.getInstance().isStarting(environment) &&
                         !processHandler.isProcessTerminating
                 }
 
@@ -117,7 +115,7 @@ class CargoBuildAdapter(
 
             override fun actionPerformed(event: AnActionEvent) {
                 ExecutionManagerImpl.stopProcess(processHandler)
-                ExecutionUtil.restart(environment)
+                ExecutionManager.getInstance(environment.project).restartRunProfile(environment)
             }
         }
     }
