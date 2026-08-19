@@ -62,8 +62,8 @@ for block in exact_blocks.values():
     s = s.replace(block, '')
 p.write_text(s)
 
-# Patch the actual Kotlin source for IDEA 2026.2. Avoid ReadAction.nonBlocking's
-# generic signature because Kotlin 2.3 + Platform 262 cannot infer it reliably.
+# Patch the actual Kotlin source for IDEA 2026.2. This implementation avoids
+# ReadAction.nonBlocking entirely and makes the Computable generic explicit.
 source = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
 source_text = source.read_text()
 start = source_text.find('inline fun <R> Project.nonBlocking(')
@@ -72,7 +72,7 @@ if start == -1:
 end = source_text.find('\n\n@Service', start)
 if end == -1:
     raise SystemExit("Project.nonBlocking block terminator was not found")
-new_block = '''inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {\n    if (isUnitTestMode) {\n        uiContinuation(block())\n    } else {\n        AppExecutorUtil.getAppExecutorService().execute {\n            val result = ApplicationManager.getApplication().runReadAction(Computable { block() })\n            ApplicationManager.getApplication().invokeLater(\n                { uiContinuation(result) },\n                ModalityState.current()\n            )\n        }\n    }\n}'''
+new_block = '''inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {\n    if (isUnitTestMode) {\n        uiContinuation(block())\n    } else {\n        AppExecutorUtil.getAppExecutorService().execute {\n            val result = ApplicationManager.getApplication().runReadAction(Computable<R> { block() })\n            ApplicationManager.getApplication().invokeLater(\n                { uiContinuation(result) },\n                ModalityState.current()\n            )\n        }\n    }\n}'''
 source_text = source_text[:start] + new_block + source_text[end:]
 source.write_text(source_text)
 
@@ -93,10 +93,10 @@ for path in ("settings.gradle.kts", "build.gradle.kts", "plugin/src/main/resourc
 if leftovers:
     raise SystemExit("262 patch left unsupported/stale entries:\n" + "\n".join(leftovers))
 
-# Final source guard: the fragile expression must not be present in the generated 262 tree.
+# Final source guard: the fragile API must not remain in the generated 262 tree.
 final_source = source.read_text()
 if 'ReadAction.nonBlocking' in final_source:
-    raise SystemExit("262 patch still contains ReadAction.nonBlocking in Project.nonBlocking")
-if 'AppExecutorUtil.getAppExecutorService().execute' not in final_source:
-    raise SystemExit("262 Project.nonBlocking replacement was not applied")
+    raise SystemExit("262 patch still contains ReadAction.nonBlocking")
+if 'Computable<R> { block() }' not in final_source:
+    raise SystemExit("Explicit Computable<R> replacement was not applied")
 PY
