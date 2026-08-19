@@ -3,6 +3,7 @@ set -euo pipefail
 
 python3 - <<'PY'
 from pathlib import Path
+import re
 
 p = Path("build.gradle.kts")
 s = p.read_text()
@@ -37,10 +38,12 @@ if needle in s and 'if (baseIDE == "IC")' not in s:
         1,
     )
 
+# ML ranking is not a bundled plugin in IDEA 2026.2.
 s = s.replace('val mlCompletionPlugin = "com.intellij.completion.ml.ranking"\n', '')
 s = s.replace('                javaScriptPlugin,\n                mlCompletionPlugin\n', '                javaScriptPlugin\n')
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
 
+# IntelliJ 2026.2 modularized several APIs that this older Rust plugin uses.
 marker = '            bundledModule("intellij.spellchecker")\n'
 modules = '''            bundledModule("intellij.spellchecker")
             bundledModule("intellij.platform.smRunner")
@@ -53,23 +56,16 @@ modules = '''            bundledModule("intellij.spellchecker")
 if marker in s and 'bundledModule("intellij.platform.smRunner")' not in s:
     s = s.replace(marker, modules, 1)
 
-# Community IDEA 2026.2 does not ship the old duplicate-detection module.
-s = s.replace('    "duplicates",\n', '')
+# Community IDEA 2026.2 does not ship duplicate detection or ML ranking.
+s = re.sub(r'^\s*"duplicates",\n', '', s, flags=re.M)
+s = re.sub(r'^\s*"ml-completion"\s*\n', '', s, flags=re.M)
 s = s.replace('            pluginComposedModule(implementation(project(":duplicates")))\n', '')
-start = s.find('project(":duplicates") {')
-if start != -1:
-    end = s.find('\nproject(":coverage") {', start)
-    if end != -1:
-        s = s[:start] + s[end+1:]
-
-# Community IDEA 2026.2 does not ship the old ML completion ranking API.
-s = s.replace('    "ml-completion"\n', '')
 s = s.replace('            pluginComposedModule(implementation(project(":ml-completion")))\n', '')
-start = s.find('project(":ml-completion") {')
-if start != -1:
-    end = s.find('\nproject(":js") {', start)
-    if end != -1:
-        s = s[:start] + s[end+1:]
+
+# Remove unsupported project blocks robustly, regardless of their position.
+for name in ("duplicates", "ml-completion"):
+    pattern = rf'\nproject\(":{re.escape(name)}"\)\s*\{{.*?\n\}}\n(?=project\(|tasks\.register|$)'
+    s = re.sub(pattern, '\n', s, flags=re.S)
 
 p.write_text(s)
 PY
@@ -78,12 +74,18 @@ python3 - <<'PY'
 from pathlib import Path
 
 p = Path("settings.gradle.kts")
-s = p.read_text().replace('    "duplicates",\n', '').replace('    "ml-completion"\n', '')
+s = p.read_text()
+s = s.replace('    "duplicates",\n', '').replace('    "ml-completion"\n', '')
 p.write_text(s)
 
 p = Path("plugin/src/main/resources/META-INF/plugin.xml")
-s = p.read_text().replace('        <module name="org.rust.duplicates"/>\n', '').replace('        <module name="org.rust.mlCompletion"/>\n', '')
+s = p.read_text()
+s = s.replace('        <module name="org.rust.duplicates"/>\n', '')
+s = s.replace('        <module name="org.rust.mlCompletion"/>\n', '')
 p.write_text(s)
 PY
 
-grep -nE 'duplicates|ml-completion|org\.rust\.duplicates|org\.rust\.mlCompletion' settings.gradle.kts build.gradle.kts plugin/src/main/resources/META-INF/plugin.xml || true
+if grep -RniE 'project\(":(duplicates|ml-completion)"\)|pluginComposedModule\(implementation\(project\(":(duplicates|ml-completion)"\)\)\)|"(duplicates|ml-completion)"|org\.rust\.(duplicates|mlCompletion)' settings.gradle.kts build.gradle.kts plugin/src/main/resources/META-INF/plugin.xml; then
+  echo 'Unsupported Community-262 modules still present' >&2
+  exit 1
+fi
