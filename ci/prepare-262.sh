@@ -22,7 +22,6 @@ replacements = {
     'jvmTarget.set(JvmTarget.JVM_24)': 'jvmTarget.set(JvmTarget.JVM_25)',
     'jvmTarget.set(JvmTarget.fromTarget("25"))': 'jvmTarget.set(JvmTarget.JVM_25)',
 }
-
 for old, new in replacements.items():
     s = s.replace(old, new)
 
@@ -38,7 +37,7 @@ if needle in s and 'if (baseIDE == "IC")' not in s:
         1,
     )
 
-# ML ranking is no longer a bundled plugin in IDEA 2026.2.
+# ML ranking is not a bundled plugin in IDEA 2026.2.
 s = s.replace('val mlCompletionPlugin = "com.intellij.completion.ml.ranking"\n', '')
 s = s.replace('                javaScriptPlugin,\n                mlCompletionPlugin\n', '                javaScriptPlugin\n')
 s = s.replace('            bundledPlugins(listOf(mlCompletionPlugin))\n', '')
@@ -56,79 +55,37 @@ modules = '''            bundledModule("intellij.spellchecker")
 if marker in s and 'bundledModule("intellij.platform.smRunner")' not in s:
     s = s.replace(marker, modules, 1)
 
-# IntelliJ IDEA Community has no Duplicate Detection API in 262.
-# Remove the dedicated duplicates project and its composed plugin module.
-s = s.replace('        pluginComposedModule(implementation(project(":duplicates")))\n', '')
-start = 'project(":duplicates") {\n'
-if start in s:
-    end = s.find('\nproject(":coverage") {', s.index(start))
-    if end != -1:
-        s = s[:s.index(start)] + s[end + 1:]
-
-p.write_text(s)
-
-p = Path("settings.gradle.kts")
-s = p.read_text()
+# Community IDEA 2026.2 does not ship the old duplicate-detection module.
 s = s.replace('    "duplicates",\n', '')
-p.write_text(s)
+s = s.replace('            pluginComposedModule(implementation(project(":duplicates")))\n', '')
+start = s.find('project(":duplicates") {')
+if start != -1:
+    end = s.find('\nproject(":coverage") {', start)
+    if end != -1:
+        s = s[:start] + s[end+1:]
 
-p = Path("plugin/src/main/resources/META-INF/plugin.xml")
-s = p.read_text()
-s = s.replace('        <module name="org.rust.duplicates"/>\n', '')
+# Community IDEA 2026.2 does not ship the old ML completion ranking API.
+s = s.replace('    "ml-completion"\n', '')
+s = s.replace('            pluginComposedModule(implementation(project(":ml-completion")))\n', '')
+start = s.find('project(":ml-completion") {')
+if start != -1:
+    end = s.find('\nproject(":js") {', start)
+    if end != -1:
+        s = s[:start] + s[end+1:]
+
 p.write_text(s)
 PY
 
-# IntelliJ 2026.2 API migrations needed by this codebase.
 python3 - <<'PY'
 from pathlib import Path
 
-p = Path("build.gradle.kts")
-s = p.read_text()
-
+p = Path("settings.gradle.kts")
+s = p.read_text().replace('    "duplicates",\n', '').replace('    "ml-completion"\n', '')
 p.write_text(s)
 
-p = Path("src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt")
-s = p.read_text()
-s = s.replace('import com.intellij.execution.runners.ExecutionUtil\n', '')
-s = s.replace('import com.intellij.execution.ExecutionManager\n', '')
-s = s.replace('ExecutionUtil.restart(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(environment)')
-s = s.replace('ExecutionManager.getInstance(environment.project).restartRunProfile(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(environment)')
-if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' not in s:
-    s = s.replace('import com.intellij.execution.ExecutorRegistry\n', 'import com.intellij.execution.ExecutorRegistry\nimport com.intellij.execution.impl.ExecutionManagerImpl\n')
-p.write_text(s)
-
-p = Path("src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt")
-s = p.read_text()
-s = s.replace(
-'''        override fun createStub(parentStub: StubElement<*>, node: ASTNode): StubElement<*>? {
-            val nodeType = node.elementType
-            val factory = StubElementRegistryService.getInstance().getStubFactory(nodeType) ?: return null
-''',
-'''        override fun createStub(
-            parentStub: StubElement<*>,
-            node: ASTNode,
-            registryService: StubElementRegistryService
-        ): StubElement<*>? {
-            val nodeType = node.elementType
-            val factory = registryService.getStubFactory(nodeType) ?: return null
-''')
-p.write_text(s)
-
-p = Path("src/main/kotlin/org/rust/openapiext/utils.kt")
-s = p.read_text()
-s = s.replace('import com.intellij.ide.ui.LafManager\n', '')
-s = s.replace('import com.intellij.ide.ui.laf.UIThemeBasedLookAndFeelInfo\n', '')
-s = s.replace(
-'''val isUnderDarkTheme: Boolean
-    get() {
-        val lookAndFeel = LafManager.getInstance().currentLookAndFeel as? UIThemeBasedLookAndFeelInfo
-        return lookAndFeel?.theme?.isDark == true || UIUtil.isUnderDarcula()
-    }
-''',
-'''val isUnderDarkTheme: Boolean
-    get() = UIUtil.isUnderDarcula()
-''')
+p = Path("plugin/src/main/resources/META-INF/plugin.xml")
+s = p.read_text().replace('        <module name="org.rust.duplicates"/>\n', '').replace('        <module name="org.rust.mlCompletion"/>\n', '')
 p.write_text(s)
 PY
 
-grep -nE 'smRunner|structureView.impl|testRunner|structuralSearch|restartRunProfile|createStub\(|isUnderDarkTheme|duplicates' build.gradle.kts settings.gradle.kts plugin/src/main/resources/META-INF/plugin.xml src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.kt src/main/kotlin/org/rust/lang/core/resolve2/util/RsBlockStubBuilder.kt src/main/kotlin/org/rust/openapiext/utils.kt || true
+grep -nE 'duplicates|ml-completion|org\.rust\.duplicates|org\.rust\.mlCompletion' settings.gradle.kts build.gradle.kts plugin/src/main/resources/META-INF/plugin.xml || true
