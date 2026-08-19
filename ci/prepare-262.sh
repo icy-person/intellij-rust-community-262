@@ -67,12 +67,7 @@ p = Path("src/main/kotlin/org/rust/cargo/runconfig/buildtool/CargoBuildAdapter.k
 s = p.read_text()
 s = s.replace('import com.intellij.execution.runners.ExecutionUtil\n', '')
 s = s.replace('import com.intellij.execution.ExecutionManager\n', '')
-s = s.replace('ExecutionUtil.restart(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(null, environment, null)')
-if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' not in s:
-    s = s.replace('import com.intellij.execution.impl.ExecutionManagerImpl\n', 'import com.intellij.execution.impl.ExecutionManagerImpl\n') if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' in s else s.replace('import com.intellij.execution.impl.ExecutionManagerImpl\n', '')
-# Add required implementation import near execution imports.
-if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' not in s:
-    s = s.replace('import com.intellij.execution.impl.ExecutionManagerImpl\n', 'import com.intellij.execution.impl.ExecutionManagerImpl\n')
+s = s.replace('ExecutionUtil.restart(environment)', 'ExecutionManagerImpl.getInstance(environment.project).restartRunProfile(environment)')
 if 'import com.intellij.execution.impl.ExecutionManagerImpl\n' not in s:
     s = s.replace('import com.intellij.execution.ExecutorRegistry\n', 'import com.intellij.execution.ExecutorRegistry\nimport com.intellij.execution.impl.ExecutionManagerImpl\n')
 p.write_text(s)
