@@ -40,7 +40,6 @@ val copyrightPlugin = "com.intellij.copyright"
 val javaPlugin = "com.intellij.java"
 val javaIdePlugin = "com.intellij.java.ide"
 val javaScriptPlugin = "JavaScript"
-val mlCompletionPlugin = "com.intellij.completion.ml.ranking"
 
 val compileNativeCodeTaskName = "compileNativeCode"
 
@@ -307,8 +306,7 @@ project(":plugin") {
                 psiViewerPlugin,
             )
             val bundledPluginList = mutableListOf(
-                javaScriptPlugin,
-                mlCompletionPlugin
+                javaScriptPlugin
             )
             if (ideToRun in setOf("IU", "IC")) {
                 bundledPluginList += listOf(
@@ -562,10 +560,6 @@ project(":js") {
 
 project(":ml-completion") {
     dependencies {
-        intellijPlatform {
-            bundledPlugins(listOf(mlCompletionPlugin))
-        }
-
         implementation("org.jetbrains.intellij.deps.completion:completion-ranking-rust:0.4.1")
         implementation(project(":"))
         testImplementation(project(":", "testOutput"))
