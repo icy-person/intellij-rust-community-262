@@ -1,5 +1,5 @@
 /*
- * Use of this source code is governed by the MIT license that can be
+ * Use of this source code is governed by the MIT license which can be
  * found in the LICENSE file.
  */
 
@@ -8,7 +8,6 @@ package org.rust.openapiext
 import com.intellij.concurrency.SensitiveProgressWrapper
 import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.ide.plugins.PluginManagerCore
-import com.intellij.ide.ui.LafManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
@@ -73,36 +72,15 @@ val isInternal: Boolean get() = ApplicationManager.getApplication().isInternal
 val isUnderDarkTheme: Boolean
     get() = UIUtil.isUnderDarcula()
 
-/**
- * Perform a write action for the provided project.
- *
- * This method should be used for the implementation of all user-initiated IDE actions.
- * i.e. those which should appear in the Undo/Redo stack. It explicitly requires the name
- * and groupId of the action are provided, unlike the `WriteCommandAction` methods which
- * allow omitting that information or to use "Undefined" defaults.
- *
- * Actions which should not be undoable by the user, such as internal macro expansion or
- * actions in tests, should not use this method. You can use methods on `WriteCommandAction`
- * instead.
- *
- * @param commandName the name of the action which will appear for the user in the Undo/Redo stack.
- * @param files files modified by the action. This may be safely omitted if a single file is
- *      modified. Otherwise, it is recommended to explicitly specify modified files, to ensure
- *      that the operation doesn't fail halfway due to some files being non-writable.
- * @param command the write action to perform. It can also return some value.
- */
 fun <T> Project.runWriteCommandAction(
     @Suppress("UnstableApiUsage")
     @NlsContexts.Command commandName: String,
     vararg files: PsiFile,
     command: () -> T
-): T {
-    return WriteCommandAction.writeCommandAction(this, *files)
-        .withName(commandName)
-        .compute<T, RuntimeException>(command)
-}
+): T = WriteCommandAction.writeCommandAction(this, *files)
+    .withName(commandName)
+    .compute<T, RuntimeException>(command)
 
-/** This is modification of [runUndoTransparentWriteAction] which applies formatting to modified code */
 fun Project.runUndoTransparentWriteCommandAction(command: () -> Unit) {
     CommandProcessor.getInstance().runUndoTransparentAction {
         WriteCommandAction.runWriteCommandAction(this, command)
@@ -112,42 +90,15 @@ fun Project.runUndoTransparentWriteCommandAction(command: () -> Unit) {
 val Project.modules: Collection<Module>
     get() = ModuleManager.getInstance(this).modules.toList()
 
-
 fun <T> recursionGuard(key: Any, block: Computable<T>, memoize: Boolean = true): T? =
     RecursionManager.doPreventingRecursion(key, memoize, block)
 
-
-fun checkWriteAccessAllowed() {
-    check(ApplicationManager.getApplication().isWriteAccessAllowed) {
-        "Needs write action"
-    }
-}
-
-fun checkWriteAccessNotAllowed() {
-    check(!ApplicationManager.getApplication().isWriteAccessAllowed)
-}
-
-fun checkReadAccessAllowed() {
-    check(ApplicationManager.getApplication().isReadAccessAllowed) {
-        "Needs read action"
-    }
-}
-
-fun checkReadAccessNotAllowed() {
-    check(!ApplicationManager.getApplication().isReadAccessAllowed)
-}
-
-fun checkIsDispatchThread() {
-    check(ApplicationManager.getApplication().isDispatchThread) {
-        "Should be invoked on the Swing dispatch thread"
-    }
-}
-
-fun checkIsBackgroundThread() {
-    check(!ApplicationManager.getApplication().isDispatchThread) {
-        "Long running operation invoked on UI thread"
-    }
-}
+fun checkWriteAccessAllowed() = check(ApplicationManager.getApplication().isWriteAccessAllowed) { "Needs write action" }
+fun checkWriteAccessNotAllowed() = check(!ApplicationManager.getApplication().isWriteAccessAllowed)
+fun checkReadAccessAllowed() = check(ApplicationManager.getApplication().isReadAccessAllowed) { "Needs read action" }
+fun checkReadAccessNotAllowed() = check(!ApplicationManager.getApplication().isReadAccessAllowed)
+fun checkIsDispatchThread() = check(ApplicationManager.getApplication().isDispatchThread) { "Should be invoked on the Swing dispatch thread" }
+fun checkIsBackgroundThread() = check(!ApplicationManager.getApplication().isDispatchThread) { "Long running operation invoked on UI thread" }
 
 fun checkIsSmartMode(project: Project) {
     if (isUnitTestMode) waitUntilIndexesAreReadyInTests(project)
@@ -164,16 +115,11 @@ fun checkCommitIsNotInProgress(project: Project) {
     }
 }
 
-/**
- * Calls `IndexingTestUtil.waitUntilIndexesAreReady(project)` via reflection.
- * This avoids direct reference to test framework classes which are not available at runtime.
- */
 fun waitUntilIndexesAreReadyInTests(project: Project) {
     if (!isUnitTestMode) return
     try {
         val clazz = Class.forName("com.intellij.testFramework.IndexingTestUtil")
-        val companionField = clazz.getDeclaredField("Companion")
-        val companion = companionField.get(null)
+        val companion = clazz.getDeclaredField("Companion").get(null)
         val method = companion.javaClass.getMethod("waitUntilIndexesAreReady", Project::class.java)
         method.invoke(companion, project)
     } catch (e: Exception) {
@@ -181,15 +127,11 @@ fun waitUntilIndexesAreReadyInTests(project: Project) {
     }
 }
 
-fun fullyRefreshDirectory(directory: VirtualFile) {
-    VfsUtil.markDirtyAndRefresh(/* async = */ false, /* recursive = */ true, /* reloadChildren = */ true, directory)
-}
+fun fullyRefreshDirectory(directory: VirtualFile) =
+    VfsUtil.markDirtyAndRefresh(false, true, true, directory)
 
 fun VirtualFile.findFileByMaybeRelativePath(path: String): VirtualFile? =
-    if (FileUtil.isAbsolute(path))
-        fileSystem.findFileByPath(path)
-    else
-        findFileByRelativePath(path)
+    if (FileUtil.isAbsolute(path)) fileSystem.findFileByPath(path) else findFileByRelativePath(path)
 
 fun VirtualFile.findNearestExistingFile(path: String): Pair<VirtualFile, List<String>> {
     var file = this
@@ -201,44 +143,23 @@ fun VirtualFile.findNearestExistingFile(path: String): Pair<VirtualFile, List<St
 }
 
 val VirtualFile.pathAsPath: Path get() = Paths.get(path)
-
-fun VirtualFile.toPsiFile(project: Project): PsiFile? =
-    PsiManager.getInstance(project).findFile(this)
-
-fun VirtualFile.toPsiDirectory(project: Project): PsiDirectory? =
-    PsiManager.getInstance(project).findDirectory(this)
-
-fun Document.toPsiFile(project: Project): PsiFile? =
-    PsiDocumentManager.getInstance(project).getPsiFile(this)
-
-val Document.virtualFile: VirtualFile?
-    get() = FileDocumentManager.getInstance().getFile(this)
-
-val VirtualFile.document: Document?
-    get() = FileDocumentManager.getInstance().getDocument(this)
-
-val PsiFile.document: Document?
-    get() = viewProvider.document
-
-val VirtualFile.fileId: Int
-    get() = (this as VirtualFileWithId).id
+fun VirtualFile.toPsiFile(project: Project): PsiFile? = PsiManager.getInstance(project).findFile(this)
+fun VirtualFile.toPsiDirectory(project: Project): PsiDirectory? = PsiManager.getInstance(project).findDirectory(this)
+fun Document.toPsiFile(project: Project): PsiFile? = PsiDocumentManager.getInstance(project).getPsiFile(this)
+val Document.virtualFile: VirtualFile? get() = FileDocumentManager.getInstance().getFile(this)
+val VirtualFile.document: Document? get() = FileDocumentManager.getInstance().getDocument(this)
+val PsiFile.document: Document? get() = viewProvider.document
+val VirtualFile.fileId: Int get() = (this as VirtualFileWithId).id
 
 inline fun <Key: Any, reified Psi : PsiElement> getElements(
-    indexKey: StubIndexKey<Key, Psi>,
-    key: Key, project: Project,
-    scope: GlobalSearchScope?
-): Collection<Psi> =
-    StubIndex.getElements(indexKey, key, project, scope, Psi::class.java)
-
+    indexKey: StubIndexKey<Key, Psi>, key: Key, project: Project, scope: GlobalSearchScope?
+): Collection<Psi> = StubIndex.getElements(indexKey, key, project, scope, Psi::class.java)
 
 fun Element.toXmlString() = JDOMUtil.writeElement(this)
-
-fun elementFromXmlString(xml: String): Element =
-    SAXBuilder().build(xml.byteInputStream()).rootElement
+fun elementFromXmlString(xml: String): Element = SAXBuilder().build(xml.byteInputStream()).rootElement
 
 class CachedVirtualFile(private val url: String?) {
     private val cache = AtomicReference<VirtualFile>()
-
     operator fun getValue(thisRef: Any?, property: KProperty<*>): VirtualFile? {
         if (url == null) return null
         val cached = cache.get()
@@ -251,16 +172,6 @@ class CachedVirtualFile(private val url: String?) {
 
 fun saveAllDocuments() = FileDocumentManager.getInstance().saveAllDocuments()
 
-/**
- * Calling of [saveAllDocuments] uses [TrailingSpacesStripper] to format all unsaved documents.
- *
- * In case of [RsExternalLinterPass] it backfires:
- * 1. Calling [TrailingSpacesStripper.strip] on *every* file change.
- * 2. Double run of external linter, because [TrailingSpacesStripper.strip] generates new "PSI change" events.
- *
- * This function saves all documents "as they are" (see [FileDocumentManager.saveDocumentAsIs]), but also fires that
- * these documents should be stripped later (when [saveAllDocuments] is called).
- */
 fun saveAllDocumentsAsTheyAre(reformatLater: Boolean = true) {
     val documentManager = FileDocumentManager.getInstance()
     val rustfmtWatcher = RustfmtWatcher.getInstance()
@@ -275,64 +186,34 @@ fun saveAllDocumentsAsTheyAre(reformatLater: Boolean = true) {
 
 private fun FileDocumentManager.stripDocumentLater(document: Document): Boolean {
     if (this !is FileDocumentManagerImpl) return false
-    val trailingSpacesStripper = trailingSpacesStripperField
-        ?.get(this) as? TrailingSpacesStripper ?: return false
-
+    val trailingSpacesStripper = trailingSpacesStripperField?.get(this) as? TrailingSpacesStripper ?: return false
     @Suppress("UNCHECKED_CAST")
-    val documentsToStripLater = documentsToStripLaterField
-        ?.get(trailingSpacesStripper) as? MutableSet<Document> ?: return false
+    val documentsToStripLater = documentsToStripLaterField?.get(trailingSpacesStripper) as? MutableSet<Document> ?: return false
     return documentsToStripLater.add(document)
 }
 
-private val trailingSpacesStripperField: Field? =
-    initFieldSafely<FileDocumentManagerImpl>("myTrailingSpacesStripper")
+private val trailingSpacesStripperField: Field? = initFieldSafely<FileDocumentManagerImpl>("myTrailingSpacesStripper")
+private val documentsToStripLaterField: Field? = initFieldSafely<TrailingSpacesStripper>("myDocumentsToStripLater")
 
-private val documentsToStripLaterField: Field? =
-    initFieldSafely<TrailingSpacesStripper>("myDocumentsToStripLater")
-
-private inline fun <reified T> initFieldSafely(fieldName: String): Field? =
-    try {
-        T::class.java
-            .getDeclaredField(fieldName)
-            .apply { isAccessible = true }
-    } catch (e: Throwable) {
-        if (isUnitTestMode) throw e else null
-    }
-
-inline fun testAssert(action: () -> Boolean) {
-    testAssert(action) { "Assertion failed" }
+private inline fun <reified T> initFieldSafely(fieldName: String): Field? = try {
+    T::class.java.getDeclaredField(fieldName).apply { isAccessible = true }
+} catch (e: Throwable) {
+    if (isUnitTestMode) throw e else null
 }
 
+inline fun testAssert(action: () -> Boolean) { testAssert(action) { "Assertion failed" } }
 inline fun testAssert(action: () -> Boolean, lazyMessage: () -> Any) {
-    if (isUnitTestMode && !action()) {
-        val message = lazyMessage()
-        throw AssertionError(message)
-    }
+    if (isUnitTestMode && !action()) throw AssertionError(lazyMessage())
 }
 
 fun <T> runWithCheckCanceled(callable: () -> T): T =
     ApplicationUtil.runWithCheckCanceled(callable, ProgressManager.getInstance().progressIndicator)
 
-fun <T> Project.computeWithCancelableProgress(
-    @Suppress("UnstableApiUsage") @ProgressTitle title: String,
-    supplier: () -> T
-): T {
-    if (isUnitTestMode) {
-        return supplier()
-    }
-    return ProgressManager.getInstance().runProcessWithProgressSynchronously<T, Exception>(supplier, title, true, this)
-}
+fun <T> Project.computeWithCancelableProgress(@ProgressTitle title: String, supplier: () -> T): T =
+    if (isUnitTestMode) supplier() else ProgressManager.getInstance().runProcessWithProgressSynchronously(supplier, title, true, this)
 
-fun Project.runWithCancelableProgress(
-    @Suppress("UnstableApiUsage") @ProgressTitle title: String,
-    process: () -> Unit
-): Boolean {
-    if (isUnitTestMode) {
-        process()
-        return true
-    }
-    return ProgressManager.getInstance().runProcessWithProgressSynchronously(process, title, true, this)
-}
+fun Project.runWithCancelableProgress(@ProgressTitle title: String, process: () -> Unit): Boolean =
+    if (isUnitTestMode) { process(); true } else ProgressManager.getInstance().runProcessWithProgressSynchronously(process, title, true, this)
 
 inline fun <T : Any> UserDataHolder.getOrPut(key: Key<T>, defaultValue: () -> T): T {
     val data = getUserData(key)
@@ -342,37 +223,24 @@ inline fun <T : Any> UserDataHolder.getOrPut(key: Key<T>, defaultValue: () -> T)
     return value
 }
 
-const val PLUGIN_ID: String = "org.rust.lang"
-
+const val PLUGIN_ID = "org.rust.lang"
 fun plugin(): IdeaPluginDescriptor = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))!!
-
 val String.escaped: String get() = StringUtil.escapeXmlEntities(this)
 
 fun <T> runReadActionInSmartMode(dumbService: DumbService, action: () -> T): T {
     ProgressManager.checkCanceled()
     if (dumbService.project.isDisposed) throw ProcessCanceledException()
-    return dumbService.runReadActionInSmartMode(Computable {
-        ProgressManager.checkCanceled()
-        action()
-    })
+    return dumbService.runReadActionInSmartMode(Computable { ProgressManager.checkCanceled(); action() })
 }
 
-fun <T : Any> executeUnderProgressWithWriteActionPriorityWithRetries(
-    indicator: ProgressIndicator,
-    action: (ProgressIndicator) -> T
-): T {
+fun <T : Any> executeUnderProgressWithWriteActionPriorityWithRetries(indicator: ProgressIndicator, action: (ProgressIndicator) -> T): T {
     indicator.checkCanceled()
-    if (isUnitTestMode && ApplicationManager.getApplication().isReadAccessAllowed) {
-        return action(indicator)
-    } else {
-        checkReadAccessNotAllowed()
-    }
+    if (isUnitTestMode && ApplicationManager.getApplication().isReadAccessAllowed) return action(indicator)
+    checkReadAccessNotAllowed()
     var result: T? = null
     do {
         val wrappedIndicator = SensitiveProgressWrapper(indicator)
-        val success = runWithWriteActionPriority(wrappedIndicator) {
-            result = action(wrappedIndicator)
-        }
+        val success = runWithWriteActionPriority(wrappedIndicator) { result = action(wrappedIndicator) }
         if (!success) {
             indicator.checkCanceled()
             ApplicationManager.getApplication().runReadAction(EmptyRunnable.getInstance())
@@ -383,15 +251,12 @@ fun <T : Any> executeUnderProgressWithWriteActionPriorityWithRetries(
 
 fun runWithWriteActionPriority(indicator: ProgressIndicator, action: () -> Unit): Boolean =
     ProgressIndicatorUtils.runWithWriteActionPriority(action, indicator)
-
 fun runInReadActionWithWriteActionPriority(indicator: ProgressIndicator, action: () -> Unit): Boolean =
     ProgressIndicatorUtils.runInReadActionWithWriteActionPriority(action, indicator)
 
 fun <T : Any> computeInReadActionWithWriteActionPriority(indicator: ProgressIndicator, action: () -> T): T {
     lateinit var result: T
-    val success = runInReadActionWithWriteActionPriority(indicator) {
-        result = action()
-    }
+    val success = runInReadActionWithWriteActionPriority(indicator) { result = action() }
     if (!success) throw ProcessCanceledException()
     return result
 }
@@ -399,36 +264,73 @@ fun <T : Any> computeInReadActionWithWriteActionPriority(indicator: ProgressIndi
 fun <T> executeUnderProgress(indicator: ProgressIndicator, action: () -> T): T {
     var result: T? = null
     ProgressManager.getInstance().executeProcessUnderProgress({ result = action() }, indicator)
-    @Suppress("UNCHECKED_CAST")
-    return result ?: (null as T)
+    @Suppress("UNCHECKED_CAST") return result ?: (null as T)
 }
 
-/**
- * [this] indicator can be an instance of [com.intellij.openapi.progress.impl.BackgroundableProcessIndicator]
- * class, which is thread sensitive and its [ProgressIndicator.checkCanceled] method should be used only from
- * a single thread (see [com.intellij.openapi.progress.util.ProgressWindow.MyDelegate.checkCanceled]).
- * So we propagate cancellation.
- */
-fun ProgressIndicator.toThreadSafeProgressIndicator(): ProgressIndicator {
-    return if (this is ProgressIndicatorEx) {
-        val threadSafeIndicator = EmptyProgressIndicator()
-        addStateDelegate(object : AbstractProgressIndicatorExBase() {
-            override fun cancel() = threadSafeIndicator.cancel()
-        })
-        threadSafeIndicator
-    } else {
-        this
-    }
-}
+fun ProgressIndicator.toThreadSafeProgressIndicator(): ProgressIndicator = if (this is ProgressIndicatorEx) {
+    val threadSafeIndicator = EmptyProgressIndicator()
+    addStateDelegate(object : AbstractProgressIndicatorExBase() { override fun cancel() = threadSafeIndicator.cancel() })
+    threadSafeIndicator
+} else this
 
 fun <T : PsiElement> T.createSmartPointer(): SmartPsiElementPointer<T> =
     SmartPointerManager.getInstance(project).createSmartPsiElementPointer(this)
 
-val DataContext.psiFile: PsiFile?
-    get() = getData(CommonDataKeys.PSI_FILE)
+val DataContext.psiFile: PsiFile? get() = getData(CommonDataKeys.PSI_FILE)
+val DataContext.editor: Editor? get() = getData(CommonDataKeys.EDITOR)
+val DataContext.project: Project? get() = getData(CommonDataKeys.PROJECT)
+val DataContext.elementUnderCaretInEditor: PsiElement?
+    get() = psiFile?.let { file -> editor?.let { file.findElementAt(it.caretModel.offset) } }
 
-val DataContext.editor: Editor?
-    get() = getData(CommonDataKeys.EDITOR)
+fun isFeatureEnabled(featureId: String): Boolean {
+    if (isHeadlessEnvironment) {
+        val value = System.getProperty(featureId)?.toBooleanStrictOrNull()
+        if (value != null) return value
+    }
+    return Experiments.getInstance().isFeatureEnabled(featureId)
+}
 
-val DataContext.project: Project?
-    get() = getData(CommonDataKeys.PROJECT)
+fun setFeatureEnabled(featureId: String, enabled: Boolean) = Experiments.getInstance().setFeatureEnabled(featureId, enabled)
+
+fun <T> runWithEnabledFeatures(vararg featureIds: String, action: () -> T): T {
+    val currentValues = featureIds.map { it to isFeatureEnabled(it) }
+    featureIds.forEach { setFeatureEnabled(it, true) }
+    return try { action() } finally { currentValues.forEach { (id, value) -> setFeatureEnabled(id, value) } }
+}
+
+fun <T, D> getCachedOrCompute(
+    dataHolder: UserDataHolder,
+    key: Key<SoftReference<Pair<T, D>>>,
+    dependency: D,
+    provider: () -> T
+): T {
+    val oldResult = dataHolder.getUserData(key)?.get()
+    if (oldResult != null && oldResult.second == dependency) return oldResult.first
+    val value = provider()
+    dataHolder.putUserData(key, SoftReference(value to dependency))
+    return value
+}
+
+inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {
+    if (isUnitTestMode) {
+        uiContinuation(block())
+    } else {
+        ReadAction.nonBlocking(Callable { block() })
+            .inSmartMode(this)
+            .expireWith(RsPluginDisposable.getInstance(this))
+            .finishOnUiThread(ModalityState.current()) { result -> uiContinuation(result) }
+            .submit(AppExecutorUtil.getAppExecutorService())
+    }
+}
+
+@Service
+class RsPluginDisposable : Disposable {
+    companion object {
+        @JvmStatic fun getInstance(project: Project): Disposable = project.service<RsPluginDisposable>()
+    }
+    override fun dispose() = Unit
+}
+
+inline fun <reified T : Configurable> Project.showSettingsDialog() {
+    ShowSettingsUtil.getInstance().showSettingsDialog(this, T::class.java)
+}
